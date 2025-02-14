@@ -827,6 +827,62 @@ figcaption {
     background-color: rgba(0, 0, 0, 0.02);
 }
 
+/* Current State Section */
+.current-state {
+    padding: 2rem 0;
+    background-color: #f8f9fa;
+}
+
+.school-current {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+.school-image {
+    position: relative;
+    margin: 2rem auto;
+    max-width: 800px;
+}
+
+.building-image {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.image-caption {
+    position: absolute;
+    bottom: 2rem;
+    right: 2rem;
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.image-caption p {
+    margin: 0.5rem 0;
+    color: #2d3748;
+    font-size: 1.1rem;
+    line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+    .image-caption {
+        position: relative;
+        bottom: auto;
+        right: auto;
+        margin-top: 1rem;
+        text-align: center;
+    }
+    
+    .image-caption p {
+        font-size: 1rem;
+    }
+}
+
 @media (max-width: 768px) {
     .univ-table td:first-child {
         padding-left: 0.5rem;
