@@ -9,8 +9,23 @@
 <body>
     <header class="site-header">
         <div class="header-content">
-            <h1>土浦第二高等学校</h1>
+            <h1>茨城県立土浦第二高等学校</h1>
+            <button class="menu-toggle" aria-label="メニュー">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </button>
             <nav class="main-nav">
+                <ul>
+                    <li><a href="index.html">ホーム</a></li>
+                    <li><a href="principal.html">校長メッセージ</a></li>
+                    <li><a href="anniversary.html">創立120周年</a></li>
+                    <li><a href="club.html">部活動</a></li>
+                    <li><a href="student-info.html">進路情報</a></li>
+                    <li><a href="current.html" class="active">土浦二高の今</a></li>
+                </ul>
+            </nav>
+            <nav class="mobile-nav">
                 <ul>
                     <li><a href="index.html">ホーム</a></li>
                     <li><a href="principal.html">校長メッセージ</a></li>
@@ -29,11 +44,47 @@
                 <h2 class="section-title">土浦二高の今</h2>
                 <div class="school-current">
                     <div class="school-image">
-                        <img src="images/school-building.jpg" alt="土浦第二高等学校の校舎" class="building-image" loading="lazy">
+                        <img src="images/school-building.jpg" alt="茨城県立土浦第二高等学校の校舎" class="building-image" loading="lazy">
                         <div class="image-caption">
                             <p>昨年創立120周年を迎えた校舎</p>
                             <p>今年も多くの生徒がそれぞれの進路へ旅立ちます。</p>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="student-hall" class="info-section hall-special">
+                <h2>生徒ホール</h2>
+                <div class="hall-content">
+                    <div class="hall-image">
+                        <img src="images/student-hall.jpg" alt="生徒ホールの様子" loading="lazy">
+                    </div>
+                    <div class="image-caption">
+                        <p>生徒の学びや交流の場となっています。</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="ground" class="info-section hall-special">
+                <h2>グラウンド</h2>
+                <div class="hall-content">
+                    <div class="hall-image">
+                        <img src="images/ground.jpg" alt="野球練習場の様子" loading="lazy">
+                    </div>
+                    <div class="image-caption">
+                        <p>野球練習場がさらに整備されました！</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="monument" class="info-section hall-special">
+                <h2>モニュメント</h2>
+                <div class="hall-content">
+                    <div class="hall-image">
+                        <img src="images/monument.jpg" alt="校舎前のモニュメント" loading="lazy">
+                    </div>
+                    <div class="image-caption">
+                        <p>2025年から体育館の改修工事が始まります。新しい体育館が楽しみです。</p>
                     </div>
                 </div>
             </section>
@@ -43,7 +94,7 @@
     <footer class="site-footer">
         <div class="footer-content">
             <div class="footer-info">
-                <p>土浦第二高等学校</p>
+                <p>茨城県立土浦第二高等学校</p>
                 <p>〒300-0026 茨城県土浦市木田余東台4-2</p>
                 <p>TEL: 029-824-1225</p>
             </div>
@@ -59,8 +110,10 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; 2025 土浦第二高等学校. All rights reserved.</p>
+            <p>&copy; 2025 茨城県立土浦第二高等学校. All rights reserved.</p>
         </div>
     </footer>
+    <script src="script.js"></script>
+    <script src="js/menu.js"></script>
 </body>
 </html>

@@ -917,6 +917,100 @@ figcaption {
     opacity: 0.9;
 }
 
+/* 2番目の吹き出しスタイル */
+.caption-style-2 {
+    position: absolute;
+    bottom: 3rem;
+    left: 3rem;
+    max-width: 400px;
+    background: rgba(0, 0, 0, 0.85);
+    padding: 2rem;
+    border-radius: 0;
+    box-shadow: 
+        0 20px 40px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transform: translateY(0);
+    transition: all 0.4s cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+.caption-style-2::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 0;
+    background: #fff;
+    transition: height 0.4s ease;
+}
+
+.caption-style-2:hover {
+    transform: translateY(-10px);
+    box-shadow: 
+        0 30px 60px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.caption-style-2:hover::before {
+    height: 100%;
+}
+
+.caption-style-2 p {
+    margin: 0;
+    color: #fff;
+}
+
+.caption-style-2 p:first-child {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    letter-spacing: 0.02em;
+    line-height: 1.4;
+    background: linear-gradient(to right, #fff, #ccc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: none;
+}
+
+.caption-style-2 p:last-child {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    font-weight: 400;
+    opacity: 0.9;
+    color: #e2e8f0;
+}
+
+@media (max-width: 768px) {
+    .caption-style-2 {
+        position: relative;
+        bottom: 0;
+        left: 0;
+        margin: -2rem 1.5rem 3rem;
+        padding: 1.5rem;
+        max-width: none;
+        background: rgba(0, 0, 0, 0.9);
+    }
+
+    .caption-style-2:hover {
+        transform: translateY(-5px);
+    }
+
+    .caption-style-2 p:first-child {
+        font-size: 1.3rem;
+    }
+
+    .caption-style-2 p:last-child {
+        font-size: 1rem;
+    }
+}
+
+/* 画像の間隔調整 */
+.school-image + .school-image {
+    margin-top: 4rem;
+}
+
 @media (max-width: 768px) {
     .building-image {
         border-radius: 16px;
@@ -1164,5 +1258,340 @@ figcaption {
 
     .club-section {
         padding: 1rem;
+    }
+}
+
+/* モバイルナビゲーション */
+.mobile-nav {
+    display: none;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    z-index: 1000;
+    padding: 5rem 1.5rem 2rem;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+    overflow-y: auto;
+}
+
+.mobile-nav.active {
+    opacity: 1;
+}
+
+.mobile-nav ul {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    height: auto;
+    gap: 1rem;
+    padding: 1rem 0;
+}
+
+.mobile-nav li {
+    margin: 0;
+    width: 90%;
+    max-width: 320px;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease-in-out;
+}
+
+.mobile-nav.active li {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.mobile-nav li:nth-child(1) { transition-delay: 0.1s; }
+.mobile-nav li:nth-child(2) { transition-delay: 0.15s; }
+.mobile-nav li:nth-child(3) { transition-delay: 0.2s; }
+.mobile-nav li:nth-child(4) { transition-delay: 0.25s; }
+.mobile-nav li:nth-child(5) { transition-delay: 0.3s; }
+.mobile-nav li:nth-child(6) { transition-delay: 0.35s; }
+.mobile-nav li:nth-child(7) { transition-delay: 0.4s; }
+
+.mobile-nav a {
+    font-size: 1.1rem;
+    padding: 0.8rem 1rem;
+    display: block;
+    width: 100%;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mobile-nav a:hover,
+.mobile-nav a.active {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.menu-toggle {
+    display: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1001;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    transition: background-color 0.3s ease;
+}
+
+.menu-toggle:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.bar {
+    display: block;
+    width: 22px;
+    height: 2px;
+    margin: 4px auto;
+    background-color: white;
+    transition: all 0.3s ease-in-out;
+}
+
+@media (max-width: 768px) {
+    .main-nav {
+        display: none;
+    }
+
+    .menu-toggle {
+        display: block;
+    }
+
+    .mobile-nav.active {
+        display: block;
+    }
+
+    /* ハンバーガーメニューのアニメーション */
+    .menu-toggle.active .bar:nth-child(1) {
+        transform: translateY(6px) rotate(45deg);
+    }
+
+    .menu-toggle.active .bar:nth-child(2) {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+
+    .menu-toggle.active .bar:nth-child(3) {
+        transform: translateY(-6px) rotate(-45deg);
+    }
+
+    /* メニューオープン時の背景スクロール防止 */
+    body.menu-open {
+        overflow: hidden;
+    }
+}
+
+/* 生徒ホール特別スタイル */
+.hall-special {
+    background: linear-gradient(135deg, #ffffff 0%, #f0f2ff 100%);
+    border-radius: 15px;
+    padding: 2.5rem;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+    margin: 2rem 0;
+}
+
+.hall-content {
+    display: flex;
+    align-items: center;
+    gap: 2.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.hall-image {
+    flex: 0 0 60%;
+    position: relative;
+}
+
+.hall-image img {
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.image-caption {
+    flex: 0 0 35%;
+    padding: 1.5rem;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    position: relative;
+}
+
+.image-caption::before {
+    content: '';
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-width: 10px;
+    border-style: solid;
+    border-color: transparent white transparent transparent;
+}
+
+.image-caption p {
+    margin: 0;
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: #2c3e50;
+}
+
+/* タブレット向けのスタイル */
+@media (max-width: 1024px) {
+    .hall-special {
+        padding: 2rem;
+        margin: 1.5rem;
+    }
+
+    .hall-content {
+        gap: 2rem;
+    }
+
+    .image-caption {
+        padding: 1.25rem;
+    }
+
+    .image-caption p {
+        font-size: 1rem;
+    }
+}
+
+/* スマートフォン向けのスタイル */
+@media (max-width: 768px) {
+    .hall-special {
+        padding: 1.5rem;
+        margin: 1rem;
+        border-radius: 10px;
+    }
+
+    .hall-content {
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    
+    .hall-image, .image-caption {
+        flex: 0 0 100%;
+        width: 100%;
+    }
+
+    .hall-image img {
+        border-radius: 8px;
+    }
+
+    .image-caption {
+        padding: 1rem;
+    }
+
+    .image-caption::before {
+        left: 50%;
+        top: -10px;
+        transform: translateX(-50%);
+        border-color: transparent transparent white transparent;
+    }
+}
+
+/* 小さいスマートフォン向けのスタイル */
+@media (max-width: 480px) {
+    .hall-special {
+        padding: 1rem;
+        margin: 0.75rem;
+    }
+
+    .hall-content {
+        gap: 1rem;
+    }
+
+    .image-caption p {
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+    }
+}
+
+/* Shokei News スタイル */
+.shokei-news {
+    padding: 2rem 1rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.news-header {
+    background: var(--primary-color);
+    color: white;
+    padding: 3rem 2rem;
+    text-align: center;
+    border-radius: 16px;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.news-date {
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+    font-weight: 500;
+}
+
+.news-title {
+    font-size: 3.5rem;
+    margin: 1rem 0;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.news-issue {
+    font-size: 1.8rem;
+    margin-top: 1rem;
+    font-weight: 500;
+}
+
+.news-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+@media (max-width: 768px) {
+    .news-header {
+        padding: 2rem 1rem;
+        border-radius: 12px;
+    }
+
+    .news-date {
+        font-size: 1.2rem;
+    }
+
+    .news-title {
+        font-size: 2.5rem;
+    }
+
+    .news-issue {
+        font-size: 1.4rem;
+    }
+
+    .news-content {
+        padding: 1.5rem;
     }
 }
