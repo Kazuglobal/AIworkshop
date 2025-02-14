@@ -869,6 +869,31 @@ figcaption {
     line-height: 1.5;
 }
 
+.current-content {
+    margin-top: 3rem;
+    padding: 0 1rem;
+}
+
+.current-section {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.current-section h3 {
+    color: var(--primary-color);
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.current-section p {
+    line-height: 1.8;
+    color: #2d3748;
+}
+
 @media (max-width: 768px) {
     .image-caption {
         position: relative;
@@ -1058,6 +1083,19 @@ figcaption {
     .univ-table th,
     .univ-table td {
         padding: 0.5rem;
+    }
+
+    .current-section {
+        padding: 1.5rem;
+        margin: 1.5rem auto;
+    }
+
+    .current-section h3 {
+        font-size: 1.3rem;
+    }
+
+    .current-section p {
+        font-size: 0.95rem;
     }
 }
 
