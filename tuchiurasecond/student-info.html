@@ -5,15 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>生徒会・進路情報 - 土浦第二高等学校</title>
     <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <header>
         <div class="header-content">
-            <h1>Shokei News</h1>
-            <div class="issue">第12号</div>
+            <button class="menu-toggle" aria-label="メニュー">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </button>
+            <div class="header-top">
+                <span class="date">2025年4月1日</span>
+                <h1>Shokei News</h1>
+                <span class="issue">第12号</span>
+            </div>
         </div>
-        <nav>
+        <nav class="main-nav">
             <ul>
                 <li><a href="index.html">トップページ</a></li>
                 <li><a href="message.html">会長ごあいさつ</a></li>
@@ -21,7 +30,7 @@
                 <li><a href="anniversary.html">創立120周年記念事業</a></li>
                 <li><a href="club.html">部活動紹介</a></li>
                 <li><a href="student-info.html" class="active">生徒会・進路情報</a></li>
-                <li><a href="current.html">土浦二高の今</a></li>
+                <li><a href="current.html">土浦二高のいま</a></li>
             </ul>
         </nav>
     </header>
@@ -50,7 +59,30 @@
                 <div class="chart-section">
                     <h3>進路状況の推移（過去14年間）</h3>
                     <div class="chart-container">
+                        <h3>進路状況の推移</h3>
                         <canvas id="careerChart"></canvas>
+                        <div class="chart-legend">
+                            <div class="legend-item">
+                                <span class="legend-color" style="background: #4299e1;"></span>
+                                <span>国公立大学</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background: #ed64a6;"></span>
+                                <span>私立大学</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background: #f6ad55;"></span>
+                                <span>短大</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background: #9f7aea;"></span>
+                                <span>専修学校</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background: #48bb78;"></span>
+                                <span>就職</span>
+                            </div>
+                        </div>
                     </div>
                     <div class="chart-container">
                         <canvas id="totalStudentsChart"></canvas>
@@ -530,6 +562,9 @@
         </article>
     </main>
 
+    <footer>
+        <p>&copy; 2025 Shokei News. All rights reserved.</p>
+    </footer>
     <script>
         // 進路状況のグラフを描画
         const ctx = document.getElementById('careerChart').getContext('2d');
@@ -672,5 +707,6 @@
             }
         });
     </script>
+    <script src="script.js"></script>
 </body>
 </html>
