@@ -1,34 +1,48 @@
-// カスタム機能を追加したmain.js
-
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+// quick_flipbook のインポートパスは環境に合わせてください
+// 例: import { FlipBook } from './node_modules/quick_flipbook/dist/quick_flipbook.mjs';
+// もしくはCDNや他の方法で読み込んでいる場合、その方法に従います。
+// ここでは仮に 'quick_flipbook' モジュール名でインポートできると仮定します。
 import { FlipBook } from 'quick_flipbook';
+import { textToSpeech, getBestVoiceForLanguage } from './api/openai.js'; // openai.js のパスが正しい前提
+import audioPlayer from './utils/audioPlayer.js'; // audioPlayer.js のパスが正しい前提
+
+// --- OpenAI APIキーの設定に関する注意 ---
+// 以下の方法はデモや開発初期段階向けです。
+// 本番環境では絶対にコード内にAPIキーを直接記述しないでください。
+// 環境変数やサーバーサイド経由で安全に管理・利用することを強く推奨します。
+window.OPENAI_DIRECT_API_KEY = 'sk-proj-xxx'; // ★ 必ず実際のAPIキーに置き換え、かつ漏洩に注意してください。可能なら.env等で管理。
 
 // 多言語対応 - 各言語のテキストデータ
 const languageData = {
     ja: { // 日本語（デフォルト）
         page1: 'お友達とたくさん遊んだ公園におもいでがいっぱい',
         page2: 'どんなお弁当か楽しみだったな。遠足。',
-        page3: '皆で一生懸命に頑張った運動会。心を一つにしたよ。',
+        page3: '皆で一生懸命に頑張った運動会。\n心を一つにしたよ。',
         page4: 'お化けになった先生が怖かったけど、いい思い出になったおばけやしき。',
         page5: 'たくさん練習してパパとママに見てもらったにじいろステージ。思い出がたくさん。',
         page6: '先生とのお別れは寂しいけど、思い出をありがとう',
         langName: '日本語',
         prevBtn: '前のページ',
         nextBtn: '次のページ',
-        langBtn: '言語選択'
+        langBtn: '言語選択',
+        speakBtn: '読み上げ',
+        stopBtn: '停止'
     },
     en: { // 英語
         page1: 'So many memories of playing with friends at the park',
         page2: 'Looking forward to what was in the lunchbox. The field trip.',
-        page3: 'The sports day where everyone did their best. We were united as one.',
+        page3: 'The sports day where everyone did their best.\nWe were united as one.',
         page4: 'The teacher was scary as a ghost, but the haunted house became a good memory.',
         page5: 'The rainbow stage where we practiced hard and performed for mom and dad. So many memories.',
         page6: 'Saying goodbye to our teacher is sad, but thank you for the memories',
         langName: 'English',
         prevBtn: 'Previous',
         nextBtn: 'Next',
-        langBtn: 'Language'
+        langBtn: 'Language',
+        speakBtn: 'Read Aloud',
+        stopBtn: 'Stop'
     },
     es: { // スペイン語
         page1: 'Tantos recuerdos jugando con amigos en el parque',
@@ -40,7 +54,9 @@ const languageData = {
         langName: 'Español',
         prevBtn: 'Anterior',
         nextBtn: 'Siguiente',
-        langBtn: 'Idioma'
+        langBtn: 'Idioma',
+        speakBtn: 'Leer en voz alta',
+        stopBtn: 'Detener'
     },
     fr: { // フランス語
         page1: 'Tant de souvenirs à jouer avec des amis dans le parc',
@@ -52,7 +68,9 @@ const languageData = {
         langName: 'Français',
         prevBtn: 'Précédent',
         nextBtn: 'Suivant',
-        langBtn: 'Langue'
+        langBtn: 'Langue',
+        speakBtn: 'Lire à haute voix',
+        stopBtn: 'Arrêter'
     },
     zh: { // 中国語
         page1: '在公园里和朋友们一起玩耍的美好回忆',
@@ -64,7 +82,9 @@ const languageData = {
         langName: '中文',
         prevBtn: '上一页',
         nextBtn: '下一页',
-        langBtn: '语言'
+        langBtn: '语言',
+        speakBtn: '朗读',
+        stopBtn: '停止'
     },
     ko: { // 韓国語
         page1: '공원에서 친구들과 함께 놀았던 많은 추억',
@@ -76,12 +96,27 @@ const languageData = {
         langName: '한국어',
         prevBtn: '이전',
         nextBtn: '다음',
-        langBtn: '언어'
+        langBtn: '언어',
+        speakBtn: '읽어주기',
+        stopBtn: '중지'
     }
 };
 
 // 現在の言語設定（デフォルトは日本語）
 let currentLanguage = 'ja';
+
+// 読み上げ用の変数
+let isSpeaking = false;
+
+// 言語コードから音声言語コードへのマッピング (SpeechSynthesis用)
+const languageVoiceMap = {
+    ja: 'ja-JP',
+    en: 'en-US',
+    es: 'es-ES',
+    fr: 'fr-FR',
+    zh: 'zh-CN',
+    ko: 'ko-KR'
+};
 
 // シーンの設定
 const scene = new THREE.Scene();
@@ -102,1085 +137,795 @@ document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
-controls.target.set(0, -1.1, 0);
+controls.target.set(0, -1.1, 0); // 本の位置に合わせて調整
+controls.minDistance = 0.5; // より近くまで寄れるように
+controls.maxDistance = 10; // より遠くまで離れられるように
+controls.maxPolarAngle = Math.PI - 0.1; // ほぼ全方向から見られるように
+controls.minPolarAngle = 0.1; // 少し制限を設ける
+controls.enableZoom = true; // ズーム機能を有効化
+controls.zoomSpeed = 1.0; // 標準のズーム速度
+controls.enableRotate = true; // 回転を有効化
+controls.rotateSpeed = 1.0; // 標準の回転速度
+controls.enablePan = true; // パン（移動）も有効化
+controls.panSpeed = 1.0; // 標準のパン速度
 controls.update();
 
 // 光源の設定
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-directionalLight.position.set(1, 1, 1);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+directionalLight.position.set(2, 3, 2);
 directionalLight.castShadow = true;
+directionalLight.shadow.mapSize.width = 1024;
+directionalLight.shadow.mapSize.height = 1024;
+directionalLight.shadow.camera.near = 0.5;
+directionalLight.shadow.camera.far = 50;
 scene.add(directionalLight);
+
+const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 0.4 );
+hemiLight.position.set( 0, 20, 0 );
+scene.add( hemiLight );
 
 // 背景の設定 - 部屋のような環境を作成
 const roomGeometry = new THREE.BoxGeometry(20, 15, 20);
 const roomMaterials = [
-    new THREE.MeshBasicMaterial({ color: 0xA9A9A9, side: THREE.BackSide }), // 右
-    new THREE.MeshBasicMaterial({ color: 0xA9A9A9, side: THREE.BackSide }), // 左
-    new THREE.MeshBasicMaterial({ color: 0xD3D3D3, side: THREE.BackSide }), // 上
-    new THREE.MeshBasicMaterial({ color: 0x8B4513, side: THREE.BackSide }), // 下（床）
-    new THREE.MeshBasicMaterial({ color: 0xA9A9A9, side: THREE.BackSide }), // 前
-    new THREE.MeshBasicMaterial({ color: 0xA9A9A9, side: THREE.BackSide })  // 後ろ
+    new THREE.MeshStandardMaterial({ color: 0xc2d1e0, side: THREE.BackSide, roughness: 0.9, metalness: 0.1 }), // 右
+    new THREE.MeshStandardMaterial({ color: 0xc2d1e0, side: THREE.BackSide, roughness: 0.9, metalness: 0.1 }), // 左
+    new THREE.MeshStandardMaterial({ color: 0xe0e0e0, side: THREE.BackSide, roughness: 0.9, metalness: 0.1 }), // 上
+    new THREE.MeshStandardMaterial({ color: 0x967969, side: THREE.BackSide, roughness: 0.8, metalness: 0.2 }), // 下
+    new THREE.MeshStandardMaterial({ color: 0xc2d1e0, side: THREE.BackSide, roughness: 0.9, metalness: 0.1 }), // 前
+    new THREE.MeshStandardMaterial({ color: 0xc2d1e0, side: THREE.BackSide, roughness: 0.9, metalness: 0.1 })  // 後ろ
 ];
 const room = new THREE.Mesh(roomGeometry, roomMaterials);
+room.position.y = 7.5 - 1.5 - 0.1;
 scene.add(room);
 
 // テーブルの作成
 const tableGeometry = new THREE.BoxGeometry(5, 0.2, 3);
-const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7, metalness: 0.3 });
 const table = new THREE.Mesh(tableGeometry, tableMaterial);
 table.position.y = -1.5;
 table.receiveShadow = true;
+table.castShadow = true;
 scene.add(table);
 
 // 絵本の作成
 const book = new FlipBook({
-    flipDuration: 0.8, // ページめくりの時間（秒）
-    yBetweenPages: 0.001, // ページ間のスペース
-    pageSubdivisions: 20 // ページの分割数（滑らかさに影響）
+    flipDuration: 0.8,
+    yBetweenPages: 0.0015,
+    pageSubdivisions: 15
 });
 
-// 絵本のスケール調整（縦横比を調整）
-book.scale.x = 0.8;
-book.scale.y = 1.1; // 縦方向に少し大きく
-book.position.y = -1.1; // テーブルの上の位置を調整
-book.rotation.x = -0.35; // より見やすい角度に傾ける
+book.scale.set(0.7, 0.9, 0.9);  // サイズ調整：全体的にやや小さめに
+book.position.y = -1.3;         // 位置調整：少し上に
+book.rotation.x = 0;            // 回転調整：傾きをなくす
+book.castShadow = true;
 scene.add(book);
 
-// 画像の上にテキストを追加する関数（プロフェッショナルな編集レイアウト）
-function createTextOverlayTexture(imagePath, text, rubyText, yPosition = 0.85) {
-    return new Promise((resolve) => {
+// 画像の上にテキストを追加する関数
+function createTextOverlayTexture(imagePath, text, rubyText = '', yPosition = 0.93) {
+    return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = function() {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            
-            const ctx = canvas.getContext('2d');
-            
-            // 画像を描画
-            ctx.drawImage(img, 0, 0);
-            
-            // 高品質なテキストレンダリングの設定
-            ctx.textRendering = 'optimizeLegibility';
-            ctx.imageSmoothingEnabled = true;
-            
-            // テキスト用の背景 - より洗練された半透明グラデーション
-            const textY = canvas.height * yPosition;
-            const bgHeight = 150; // 背景の高さを統一
-            
-            // グラデーション背景を作成
-            const gradient = ctx.createLinearGradient(0, textY - 75, 0, textY + 75);
-            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.75)');
-            gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.9)');
-            gradient.addColorStop(1, 'rgba(255, 255, 255, 0.75)');
-            
-            // 4ページ目の場合のみ、背景の高さと透明度を調整
-            if (text.startsWith('お化けになった先生が怖かった')) {
-                const bgHeightForPage4 = 180; // 4ページ目の背景の高さを他のページと同じに調整
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Failed to get 2D context');
+
+                // 画像を描画する前にスケールしてサイズ調整（上部に余白を作る）
+                const imageScaleFactor = 0.85; // 画像を85%のサイズに縮小
+                const scaledHeight = img.naturalHeight * imageScaleFactor;
+                const yOffset = (img.naturalHeight - scaledHeight) * 0.1; // 画像を少し上に移動
+
+                // クリアキャンバス
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // 画像を縮小して描画（上部に配置）
+                ctx.drawImage(img, 0, yOffset, canvas.width, scaledHeight);
                 
-                // 背景に角丸を適用（4ページ目）
-                const radius = 15;
-                ctx.beginPath();
-                ctx.moveTo(10, textY - bgHeightForPage4/2 + radius);
-                ctx.lineTo(10, textY + bgHeightForPage4/2 - radius);
-                ctx.arcTo(10, textY + bgHeightForPage4/2, 10 + radius, textY + bgHeightForPage4/2, radius);
-                ctx.lineTo(canvas.width - 10 - radius, textY + bgHeightForPage4/2);
-                ctx.arcTo(canvas.width - 10, textY + bgHeightForPage4/2, canvas.width - 10, textY + bgHeightForPage4/2 - radius, radius);
-                ctx.lineTo(canvas.width - 10, textY - bgHeightForPage4/2 + radius);
-                ctx.arcTo(canvas.width - 10, textY - bgHeightForPage4/2, canvas.width - 10 - radius, textY - bgHeightForPage4/2, radius);
-                ctx.lineTo(10 + radius, textY - bgHeightForPage4/2);
-                ctx.arcTo(10, textY - bgHeightForPage4/2, 10, textY - bgHeightForPage4/2 + radius, radius);
-                ctx.closePath();
-            } else {
-                // 背景に角丸を適用（その他のページ）
-                const radius = 15;
-                ctx.beginPath();
-                ctx.moveTo(10, textY - bgHeight/2 + radius);
-                ctx.lineTo(10, textY + bgHeight/2 - radius);
-                ctx.arcTo(10, textY + bgHeight/2, 10 + radius, textY + bgHeight/2, radius);
-                ctx.lineTo(canvas.width - 10 - radius, textY + bgHeight/2);
-                ctx.arcTo(canvas.width - 10, textY + bgHeight/2, canvas.width - 10, textY + bgHeight/2 - radius, radius);
-                ctx.lineTo(canvas.width - 10, textY - bgHeight/2 + radius);
-                ctx.arcTo(canvas.width - 10, textY - bgHeight/2, canvas.width - 10 - radius, textY - bgHeight/2, radius);
-                ctx.lineTo(10 + radius, textY - bgHeight/2);
-                ctx.arcTo(10, textY - bgHeight/2, 10, textY - bgHeight/2 + radius, radius);
-                ctx.closePath();
-            }
-            
-            // 背景のグラデーション塗りつぶし
-            ctx.fillStyle = gradient;
-            ctx.fill();
-            
-            // テキストを大きくよりはっきりと表示
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
-            ctx.shadowBlur = 3;
-            ctx.shadowOffsetX = 1;
-            ctx.shadowOffsetY = 1;
-            
-            // 4ページ目の場合、テキストを2段に分けて表示するための特別処理
-            if (text.startsWith('お化けになった先生が怖かった')) {
-                // 文字列を分解（2行に分けるため）
-                const textParts1 = analyzeText('お化けになった先生が怖かったけど、');
-                const textParts2 = analyzeText('いい思い出になったおばけやしき。');
-                
-                // フォントサイズを大きくし、フォントファミリーを追加
-                ctx.font = 'bold 36px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                
-                // 行間を調整 - 狭くする
-                const lineHeight = 55;
-                
-                // 全体のテキスト幅を計算（文字間隔を含む）- 1行目
-                let totalWidth1 = 0;
-                for (const part of textParts1) {
-                    totalWidth1 += ctx.measureText(part.text).width + (part.spacing || 0);
-                }
-                
-                // 全体のテキスト幅を計算（文字間隔を含む）- 2行目
-                let totalWidth2 = 0;
-                for (const part of textParts2) {
-                    totalWidth2 += ctx.measureText(part.text).width + (part.spacing || 0);
-                }
-                
-                // 開始位置を計算（中央揃え）- 1行目
-                const centerX = canvas.width / 2;
-                let currentX1 = centerX - totalWidth1 / 2;
-                
-                // 各部分を描画 - 1行目
-                for (const part of textParts1) {
-                    const width = ctx.measureText(part.text).width;
-                    
-                    // 本文テキストを描画 - より鮮明に
-                    ctx.fillStyle = '#000000';
-                    ctx.fillText(part.text, currentX1, textY - lineHeight/2);
-                    
-                    // 読み仮名（ルビ）を描画 - 漢字の真上に配置
-                    if (part.isKanji && part.ruby) {
-                        // 正確な中央位置
-                        const charCenterX = currentX1 + width/2;
-                        
-                        ctx.font = '18px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                        const rubyWidth = ctx.measureText(part.ruby).width;
-                        
-                        // ルビを漢字の真上、中央揃えで配置
-                        ctx.fillStyle = '#000000';
-                        ctx.fillText(part.ruby, charCenterX - rubyWidth/2, textY - lineHeight/2 - 35);
-                        
-                        // フォントを元に戻す
-                        ctx.font = 'bold 36px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                    }
-                    
-                    // X位置を更新
-                    currentX1 += width + (part.spacing || 0);
-                }
-                
-                // 開始位置を計算（中央揃え）- 2行目
-                let currentX2 = centerX - totalWidth2 / 2;
-                
-                // 各部分を描画 - 2行目
-                for (const part of textParts2) {
-                    const width = ctx.measureText(part.text).width;
-                    
-                    // 本文テキストを描画
-                    ctx.fillStyle = '#000000';
-                    ctx.fillText(part.text, currentX2, textY + lineHeight/2);
-                    
-                    // 読み仮名（ルビ）を描画 - 漢字の真上に配置
-                    if (part.isKanji && part.ruby) {
-                        // 正確な中央位置
-                        const charCenterX = currentX2 + width/2;
-                        
-                        ctx.font = '18px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                        const rubyWidth = ctx.measureText(part.ruby).width;
-                        
-                        // ルビを漢字の真上、中央揃えで配置
-                        ctx.fillStyle = '#000000';
-                        ctx.fillText(part.ruby, charCenterX - rubyWidth/2, textY + lineHeight/2 - 35);
-                        
-                        // フォントを元に戻す
-                        ctx.font = 'bold 36px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                    }
-                    
-                    // X位置を更新
-                    currentX2 += width + (part.spacing || 0);
-                }
-            } 
-            // 5ページ目も2段に分ける特別処理
-            else if (text.startsWith('たくさん練習してパパとママに見て')) {
-                // 文字列を分解（2行に分けるため）
-                const textParts1 = analyzeText('たくさん練習してパパとママに見てもらった');
-                const textParts2 = analyzeText('にじいろステージ。思い出がたくさん。');
-                
-                // フォントサイズを大きくし、フォントファミリーを追加
-                ctx.font = 'bold 36px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                
-                // 行間を調整 - 狭くする
-                const lineHeight = 55;
-                
-                // 全体のテキスト幅を計算（文字間隔を含む）- 1行目
-                let totalWidth1 = 0;
-                for (const part of textParts1) {
-                    totalWidth1 += ctx.measureText(part.text).width + (part.spacing || 0);
-                }
-                
-                // 全体のテキスト幅を計算（文字間隔を含む）- 2行目
-                let totalWidth2 = 0;
-                for (const part of textParts2) {
-                    totalWidth2 += ctx.measureText(part.text).width + (part.spacing || 0);
-                }
-                
-                // 開始位置を計算（中央揃え）- 1行目
-                const centerX = canvas.width / 2;
-                let currentX1 = centerX - totalWidth1 / 2;
-                
-                // 各部分を描画 - 1行目
-                for (const part of textParts1) {
-                    const width = ctx.measureText(part.text).width;
-                    
-                    // 本文テキストを描画
-                    ctx.fillStyle = '#000000';
-                    ctx.fillText(part.text, currentX1, textY - lineHeight/2);
-                    
-                    // 読み仮名（ルビ）を描画 - 漢字の真上に配置
-                    if (part.isKanji && part.ruby) {
-                        // 正確な中央位置
-                        const charCenterX = currentX1 + width/2;
-                        
-                        ctx.font = '18px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                        const rubyWidth = ctx.measureText(part.ruby).width;
-                        
-                        // ルビを漢字の真上、中央揃えで配置
-                        ctx.fillStyle = '#000000';
-                        ctx.fillText(part.ruby, charCenterX - rubyWidth/2, textY - lineHeight/2 - 35);
-                        
-                        // フォントを元に戻す
-                        ctx.font = 'bold 36px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                    }
-                    
-                    // X位置を更新
-                    currentX1 += width + (part.spacing || 0);
-                }
-                
-                // 開始位置を計算（中央揃え）- 2行目
-                let currentX2 = centerX - totalWidth2 / 2;
-                
-                // 各部分を描画 - 2行目
-                for (const part of textParts2) {
-                    const width = ctx.measureText(part.text).width;
-                    
-                    // 本文テキストを描画
-                    ctx.fillStyle = '#000000';
-                    ctx.fillText(part.text, currentX2, textY + lineHeight/2);
-                    
-                    // 読み仮名（ルビ）を描画 - 漢字の真上に配置
-                    if (part.isKanji && part.ruby) {
-                        // 正確な中央位置
-                        const charCenterX = currentX2 + width/2;
-                        
-                        ctx.font = '18px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                        const rubyWidth = ctx.measureText(part.ruby).width;
-                        
-                        // ルビを漢字の真上、中央揃えで配置
-                        ctx.fillStyle = '#000000';
-                        ctx.fillText(part.ruby, charCenterX - rubyWidth/2, textY + lineHeight/2 - 35);
-                        
-                        // フォントを元に戻す
-                        ctx.font = 'bold 36px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                    }
-                    
-                    // X位置を更新
-                    currentX2 += width + (part.spacing || 0);
-                }
-            }
-            // 6ページ目も2段に分ける特別処理
-            else if (text === '先生とのお別れは寂しいけど思い出をありがとう' || text === '先生とのお別れは寂しいけど、思い出をありがとう') {
-                // 文字列を分解（2行に分けるため）
-                const textParts1 = analyzeText('先生とのお別れは寂しいけど、');
-                const textParts2 = analyzeText('思い出をありがとう');
-                
-                // フォントサイズを大きくし、フォントファミリーを追加
-                ctx.font = 'bold 36px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                
-                // 行間を調整 - 狭くする
-                const lineHeight = 55;
-                
-                // 全体のテキスト幅を計算（文字間隔を含む）- 1行目
-                let totalWidth1 = 0;
-                for (const part of textParts1) {
-                    totalWidth1 += ctx.measureText(part.text).width + (part.spacing || 0);
-                }
-                
-                // 全体のテキスト幅を計算（文字間隔を含む）- 2行目
-                let totalWidth2 = 0;
-                for (const part of textParts2) {
-                    totalWidth2 += ctx.measureText(part.text).width + (part.spacing || 0);
-                }
-                
-                // 開始位置を計算（中央揃え）- 1行目
-                const centerX = canvas.width / 2;
-                let currentX1 = centerX - totalWidth1 / 2;
-                
-                // 各部分を描画 - 1行目
-                for (const part of textParts1) {
-                    const width = ctx.measureText(part.text).width;
-                    
-                    // 本文テキストを描画
-                    ctx.fillStyle = '#000000';
-                    ctx.fillText(part.text, currentX1, textY - lineHeight/2);
-                    
-                    // 読み仮名（ルビ）を描画 - 漢字の真上に配置
-                    if (part.isKanji && part.ruby) {
-                        // 正確な中央位置
-                        const charCenterX = currentX1 + width/2;
-                        
-                        ctx.font = '18px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                        const rubyWidth = ctx.measureText(part.ruby).width;
-                        
-                        // ルビを漢字の真上、中央揃えで配置
-                        ctx.fillStyle = '#000000';
-                        ctx.fillText(part.ruby, charCenterX - rubyWidth/2, textY - lineHeight/2 - 35);
-                        
-                        // フォントを元に戻す
-                        ctx.font = 'bold 36px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                    }
-                    
-                    // X位置を更新
-                    currentX1 += width + (part.spacing || 0);
-                }
-                
-                // 開始位置を計算（中央揃え）- 2行目
-                let currentX2 = centerX - totalWidth2 / 2;
-                
-                // 各部分を描画 - 2行目
-                for (const part of textParts2) {
-                    const width = ctx.measureText(part.text).width;
-                    
-                    // 本文テキストを描画
-                    ctx.fillStyle = '#000000';
-                    ctx.fillText(part.text, currentX2, textY + lineHeight/2);
-                    
-                    // 読み仮名（ルビ）を描画 - 漢字の真上に配置
-                    if (part.isKanji && part.ruby) {
-                        // 正確な中央位置
-                        const charCenterX = currentX2 + width/2;
-                        
-                        ctx.font = '18px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                        const rubyWidth = ctx.measureText(part.ruby).width;
-                        
-                        // ルビを漢字の真上、中央揃えで配置
-                        ctx.fillStyle = '#000000';
-                        ctx.fillText(part.ruby, charCenterX - rubyWidth/2, textY + lineHeight/2 - 35);
-                        
-                        // フォントを元に戻す
-                        ctx.font = 'bold 36px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                    }
-                    
-                    // X位置を更新
-                    currentX2 += width + (part.spacing || 0);
-                }
-            }
-            // 標準的なテキスト処理（他のページ）
-            else {
-                // 文字列を分解
+                ctx.textRendering = 'optimizeLegibility';
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+
+                const textY = canvas.height * yPosition;
+                const padding = canvas.width * 0.08; // パディングを増やして描画領域を狭く
+
+                // テキストを読みやすくするための設定
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.7)'; 
+                ctx.shadowBlur = 6;
+                ctx.shadowOffsetX = 2;
+                ctx.shadowOffsetY = 2;
+                ctx.fillStyle = '#000000'; // 黒テキスト
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
                 const textParts = analyzeText(text);
                 
-                // 言語ごとにフォントサイズを調整
-                let fontSize = 38;
-                if (currentLanguage !== 'ja') {
-                    // 長いテキストのチェック
-                    const estimatedLength = text.length;
-                    if (estimatedLength > 60) {
-                        fontSize = 28; // とても長いテキスト
-                    } else if (estimatedLength > 40) {
-                        fontSize = 32; // 長いテキスト
-                    } else if (estimatedLength > 30) {
-                        fontSize = 34; // やや長いテキスト
-                    }
-                }
-                
-                // テキスト位置計算のための準備 - 言語に応じたフォントサイズ
-                ctx.font = `bold ${fontSize}px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif`;
-                
-                // 全体のテキスト幅を計算（文字間隔を含む）
-                let totalWidth = 0;
-                for (const part of textParts) {
-                    totalWidth += ctx.measureText(part.text).width + (part.spacing || 0);
-                }
-                
-                // 2行に分ける必要があるかチェック
-                if (totalWidth > canvas.width * 0.9 && currentLanguage !== 'ja') {
-                    // テキストを2行に分ける処理
-                    // 最適な分割位置を探す（スペースがある場合はそこで分割）
-                    const words = text.split(' ');
-                    let firstLine = '';
-                    let secondLine = '';
-                    
-                    if (words.length > 1) {
-                        // 単語数の半分で分割
-                        const midPoint = Math.ceil(words.length / 2);
-                        firstLine = words.slice(0, midPoint).join(' ');
-                        secondLine = words.slice(midPoint).join(' ');
-                    } else {
-                        // スペースがない場合は文字数で中央付近で分割
-                        const midPoint = Math.ceil(text.length / 2);
-                        firstLine = text.substring(0, midPoint);
-                        secondLine = text.substring(midPoint);
-                    }
-                    
+                // フォントサイズを調整
+                const fontSize = Math.min(canvas.width * 0.034, 28); // 適切なサイズに調整
+                ctx.font = `bold ${fontSize}px "Hiragino Sans", "Meiryo", "Yu Gothic", "Arial", sans-serif`;
+
+                // ページ6のテキスト特別処理
+                if (text === languageData[currentLanguage].page6 && currentLanguage === 'ja') {
                     // 2行に分けて表示
-                    const textParts1 = analyzeText(firstLine);
-                    const textParts2 = analyzeText(secondLine);
+                    const firstLine = "先生とのお別れは寂しいけど";
+                    const secondLine = "思い出をありがとう";
                     
-                    // 行間を調整
-                    const lineHeight = 55;
+                    const firstLineParts = analyzeText(firstLine);
+                    const secondLineParts = analyzeText(secondLine);
                     
-                    // 全体のテキスト幅を計算（文字間隔を含む）- 1行目
-                    let totalWidth1 = 0;
-                    for (const part of textParts1) {
-                        totalWidth1 += ctx.measureText(part.text).width + (part.spacing || 0);
+                    const rubyFontSize = fontSize * 0.4;
+                    const rubyOffsetY = -fontSize * 0.7;
+                    const lineHeight = fontSize * 2.5; // 行間をさらに広げる
+                    
+                    // 1行目の幅を計算
+                    let firstLineWidth = 0;
+                    for (const part of firstLineParts) {
+                        const metrics = ctx.measureText(part.text);
+                        firstLineWidth += metrics.width + (part.spacing || 0);
                     }
                     
-                    // 全体のテキスト幅を計算（文字間隔を含む）- 2行目
-                    let totalWidth2 = 0;
-                    for (const part of textParts2) {
-                        totalWidth2 += ctx.measureText(part.text).width + (part.spacing || 0);
+                    // 2行目の幅を計算
+                    let secondLineWidth = 0;
+                    for (const part of secondLineParts) {
+                        const metrics = ctx.measureText(part.text);
+                        secondLineWidth += metrics.width + (part.spacing || 0);
                     }
                     
-                    // 開始位置を計算（中央揃え）- 1行目
-                    const centerX = canvas.width / 2;
-                    let currentX1 = centerX - totalWidth1 / 2;
-                    
-                    // 各部分を描画 - 1行目
-                    for (const part of textParts1) {
-                        const width = ctx.measureText(part.text).width;
-                        
-                        // 本文テキストを描画
-                        ctx.fillStyle = '#000000';
-                        ctx.fillText(part.text, currentX1, textY - lineHeight/2);
-                        
-                        // X位置を更新
-                        currentX1 += width + (part.spacing || 0);
-                    }
-                    
-                    // 開始位置を計算（中央揃え）- 2行目
-                    let currentX2 = centerX - totalWidth2 / 2;
-                    
-                    // 各部分を描画 - 2行目
-                    for (const part of textParts2) {
-                        const width = ctx.measureText(part.text).width;
-                        
-                        // 本文テキストを描画
-                        ctx.fillStyle = '#000000';
-                        ctx.fillText(part.text, currentX2, textY + lineHeight/2);
-                        
-                        // X位置を更新
-                        currentX2 += width + (part.spacing || 0);
-                    }
-                } else {
-                    // 1行で表示可能な場合
-                    // 開始位置を計算（中央揃え）
-                    const centerX = canvas.width / 2;
-                    let currentX = centerX - totalWidth / 2;
-                    
-                    // テキストの表示位置を統一 - ページによって調整
-                    const displayY = textY;
-                    
-                    // 各部分を描画
-                    for (const part of textParts) {
-                        const width = ctx.measureText(part.text).width;
-                        
-                        // 本文テキストを描画 - 読みやすく
-                        ctx.fillStyle = '#000000';
-                        ctx.fillText(part.text, currentX, displayY);
-                        
-                        // 読み仮名（ルビ）を描画 - 漢字の真上に配置
+                    // 1行目の描画
+                    let currentX = (canvas.width - firstLineWidth) / 2;
+                    const firstLineY = textY - lineHeight / 2;
+                    for (const part of firstLineParts) {
+                        const partWidth = ctx.measureText(part.text).width;
+                        const drawX = currentX + partWidth / 2;
+                        ctx.font = `bold ${fontSize}px "Hiragino Sans", "Meiryo", "Yu Gothic", "Arial", sans-serif`;
+                        ctx.fillStyle = '#000000'; // 黒テキスト
+                        ctx.fillText(part.text, drawX, firstLineY);
                         if (part.isKanji && part.ruby) {
-                            // 正確な中央位置
-                            const charCenterX = currentX + width/2;
-                            
-                            ctx.font = '18px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif';
-                            const rubyWidth = ctx.measureText(part.ruby).width;
-                            
-                            // ルビを漢字の真上、中央揃えで配置
-                            ctx.fillStyle = '#000000';
-                            ctx.fillText(part.ruby, charCenterX - rubyWidth/2, displayY - 30);
-                            
-                            // フォントを元に戻す
-                            ctx.font = `bold ${fontSize}px "Hiragino Sans", "Meiryo", "Yu Gothic", sans-serif`;
+                            ctx.font = `${rubyFontSize}px "Hiragino Sans", "Meiryo", "Yu Gothic", "Arial", sans-serif`;
+                            ctx.fillStyle = '#000000'; // ルビも黒
+                            ctx.fillText(part.ruby, drawX, firstLineY + rubyOffsetY);
                         }
-                        
-                        // X位置を更新
-                        currentX += width + (part.spacing || 0);
+                        currentX += partWidth + (part.spacing || 0);
                     }
+                    
+                    // 2行目の描画
+                    currentX = (canvas.width - secondLineWidth) / 2;
+                    const secondLineY = textY + lineHeight / 2;
+                    for (const part of secondLineParts) {
+                        const partWidth = ctx.measureText(part.text).width;
+                        const drawX = currentX + partWidth / 2;
+                        ctx.font = `bold ${fontSize}px "Hiragino Sans", "Meiryo", "Yu Gothic", "Arial", sans-serif`;
+                        ctx.fillStyle = '#000000'; // 黒テキスト
+                        ctx.fillText(part.text, drawX, secondLineY);
+                        if (part.isKanji && part.ruby) {
+                            ctx.font = `${rubyFontSize}px "Hiragino Sans", "Meiryo", "Yu Gothic", "Arial", sans-serif`;
+                            ctx.fillStyle = '#000000'; // ルビも黒
+                            ctx.fillText(part.ruby, drawX, secondLineY + rubyOffsetY);
+                        }
+                        currentX += partWidth + (part.spacing || 0);
+                    }
+                } 
+                // 改行が含まれているテキストの処理
+                else if (text.includes('\n')) {
+                    // 改行で分割
+                    const lines = text.split('\n');
+                    
+                    // 各行ごとに文字パーツを分析
+                    const linesParts = lines.map(line => analyzeText(line));
+                    
+                    const rubyFontSize = fontSize * 0.4;
+                    const rubyOffsetY = -fontSize * 0.7;
+                    const lineHeight = fontSize * 2.5; // 行間を広めに
+                    
+                    // 各行の幅を計算
+                    const linesWidths = linesParts.map(lineParts => {
+                        let width = 0;
+                        for (const part of lineParts) {
+                            const metrics = ctx.measureText(part.text);
+                            width += metrics.width + (part.spacing || 0);
+                        }
+                        return width;
+                    });
+                    
+                    // 行数に基づいて開始Y位置を計算
+                    const startY = textY - (lineHeight * (lines.length - 1)) / 2;
+                    
+                    // 各行を描画
+                    linesParts.forEach((lineParts, lineIndex) => {
+                        let currentX = (canvas.width - linesWidths[lineIndex]) / 2;
+                        const lineY = startY + lineIndex * lineHeight;
+                        
+                        // 行内の各パーツを描画
+                        for (const part of lineParts) {
+                            const partWidth = ctx.measureText(part.text).width;
+                            const drawX = currentX + partWidth / 2;
+                            ctx.font = `bold ${fontSize}px "Hiragino Sans", "Meiryo", "Yu Gothic", "Arial", sans-serif`;
+                            ctx.fillStyle = '#000000';
+                            ctx.fillText(part.text, drawX, lineY);
+                            
+                            // ルビがある場合は描画
+                            if (part.isKanji && part.ruby && currentLanguage === 'ja') {
+                                ctx.font = `${rubyFontSize}px "Hiragino Sans", "Meiryo", "Yu Gothic", "Arial", sans-serif`;
+                                ctx.fillStyle = '#000000';
+                                ctx.fillText(part.ruby, drawX, lineY + rubyOffsetY);
+                            }
+                            
+                            currentX += partWidth + (part.spacing || 0);
+                        }
+                    });
                 }
+                else {
+                    // 通常のテキスト処理（既存のコード）
+                    const availableWidth = canvas.width - padding * 2 - 40; // 実際の描画スペースをさらに少し狭く
+                    const lines = [];
+                    let currentLine = [];
+                    let currentLineWidth = 0;
+                    const rubyFontSize = fontSize * 0.4;
+                    const rubyOffsetY = -fontSize * 0.7;
+
+                    for (const part of textParts) {
+                        const metrics = ctx.measureText(part.text);
+                        const partWidth = metrics.width + (part.spacing || 0);
+                        if (currentLineWidth + partWidth > availableWidth && currentLine.length > 0) {
+                            lines.push({ parts: currentLine, width: currentLineWidth });
+                            currentLine = [part];
+                            currentLineWidth = partWidth;
+                        } else {
+                            currentLine.push(part);
+                            currentLineWidth += partWidth;
+                        }
+                    }
+                    if (currentLine.length > 0) {
+                        lines.push({ parts: currentLine, width: currentLineWidth });
+                    }
+
+                    const totalLines = lines.length;
+                    const lineHeight = fontSize * 2.5; // 行間をさらに広げて重なりを確実に防ぐ
+                    const startY = textY - (lineHeight * (totalLines - 1)) / 2;
+
+                    lines.forEach((line, lineIndex) => {
+                        let currentX = (canvas.width - line.width) / 2;
+                        const lineY = startY + lineIndex * lineHeight;
+                        for (const part of line.parts) {
+                            const partWidth = ctx.measureText(part.text).width;
+                            const drawX = currentX + partWidth / 2;
+                            ctx.font = `bold ${fontSize}px "Hiragino Sans", "Meiryo", "Yu Gothic", "Arial", sans-serif`;
+                            ctx.fillStyle = '#000000'; // 黒テキスト
+                            ctx.fillText(part.text, drawX, lineY);
+                            if (part.isKanji && part.ruby && currentLanguage === 'ja') {
+                                ctx.font = `${rubyFontSize}px "Hiragino Sans", "Meiryo", "Yu Gothic", "Arial", sans-serif`;
+                                ctx.fillStyle = '#000000'; // ルビも黒
+                                ctx.fillText(part.ruby, drawX, lineY + rubyOffsetY);
+                            }
+                            currentX += partWidth + (part.spacing || 0);
+                        }
+                    });
+                }
+
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.needsUpdate = true;
+                resolve(texture);
+            } catch (error) {
+                console.error(`Error creating texture for ${imagePath}:`, error);
+                reject(error);
             }
-            
-            // 小さな装飾を追加 - プロのような仕上がりに
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
-            ctx.fillRect(canvas.width/2 - 50, textY + bgHeight/2 + 10, 100, 2);
-            
-            // テクスチャを作成
-            const texture = new THREE.CanvasTexture(canvas);
-            resolve(texture);
+        };
+        img.onerror = function(err) {
+            console.error(`Error loading image: ${imagePath}`, err);
+            const errorCanvas = document.createElement('canvas');
+            errorCanvas.width = 512; errorCanvas.height = 512;
+            const ctx = errorCanvas.getContext('2d');
+            if(ctx){
+                ctx.fillStyle = 'red'; ctx.fillRect(0, 0, 512, 512);
+                ctx.fillStyle = 'white'; ctx.font = '20px Arial'; ctx.textAlign = 'center';
+                ctx.fillText(`Error: ${imagePath}`, 256, 256);
+            }
+            resolve(new THREE.CanvasTexture(errorCanvas));
         };
         img.src = imagePath;
     });
 }
 
-// テキストを解析して漢字とその読みを特定する関数（出版社クオリティに調整）
+// テキストを解析して漢字とその読みを特定する関数 (日本語用)
 function analyzeText(text) {
-    // 日本語以外の言語の場合は、シンプルな配列を返す
     if (currentLanguage !== 'ja') {
-        // 非日本語の場合は文字ごとに分割して単純な配列を返す
-        return text.split('').map(char => {
-            return {
-                text: char,
-                isKanji: false,
-                ruby: null,
-                spacing: 8
-            };
-        });
+        // 非日本語の場合は文字間隔を広めに設定
+        return text.split('').map(char => ({ text: char, isKanji: false, ruby: null, spacing: 4 }));
     }
-    
-    // 以下は日本語の場合の処理
-    // ページ1のテキスト
-    if (text === 'お友達とたくさん遊んだ公園におもいでがいっぱい') {
-        return [
-            { text: 'お', isKanji: false, ruby: null, spacing: 10 },
-            { text: '友', isKanji: true, ruby: 'とも', spacing: 25 },
-            { text: '達', isKanji: true, ruby: 'だち', spacing: 30 },
-            { text: 'と', isKanji: false, ruby: null, spacing: 20 },
-            { text: 'た', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'く', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'さ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'ん', isKanji: false, ruby: null, spacing: 20 },
-            { text: '遊', isKanji: true, ruby: 'あそ', spacing: 30 },
-            { text: 'ん', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'だ', isKanji: false, ruby: null, spacing: 10 },
-            { text: '公', isKanji: true, ruby: 'こう', spacing: 30 },
-            { text: '園', isKanji: true, ruby: 'えん', spacing: 25 },
-            { text: 'に', isKanji: false, ruby: null, spacing: 18 },
-            { text: 'お', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'も', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'い', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'で', isKanji: false, ruby: null, spacing: 20 },
-            { text: 'が', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'い', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'っ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'ぱ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'い', isKanji: false, ruby: null }
-        ];
-    } 
-    // ページ2のテキスト
-    else if (text === 'どんなお弁当か楽しみだったな。遠足。') {
-        return [
-            { text: 'ど', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'ん', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'な', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'お', isKanji: false, ruby: null, spacing: 10 },
-            { text: '弁', isKanji: true, ruby: 'べん', spacing: 25 },
-            { text: '当', isKanji: true, ruby: 'とう', spacing: 28 },
-            { text: 'か', isKanji: false, ruby: null, spacing: 15 },
-            { text: '楽', isKanji: true, ruby: 'たの', spacing: 28 },
-            { text: 'し', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'み', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'だ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'っ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'た', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'な', isKanji: false, ruby: null, spacing: 15 },
-            { text: '。', isKanji: false, ruby: null, spacing: 20 },
-            { text: '遠', isKanji: true, ruby: 'えん', spacing: 25 },
-            { text: '足', isKanji: true, ruby: 'そく', spacing: 25 },
-            { text: '。', isKanji: false, ruby: null }
-        ];
-    } 
-    // ページ3のテキスト
-    else if (text === '皆で一生懸命に頑張った運動会。心を一つにしたよ。') {
-        return [
-            { text: '皆', isKanji: true,  ruby: 'みな',   spacing: 25 },
-            { text: 'で', isKanji: false, ruby: null,     spacing: 12 },
-            { text: '一', isKanji: true,  ruby: 'いっ',   spacing: 25 },
-            { text: '生', isKanji: true,  ruby: 'しょう', spacing: 25 },
-            { text: '懸', isKanji: true,  ruby: 'けん',   spacing: 25 },
-            { text: '命', isKanji: true,  ruby: 'めい',   spacing: 25 },
-            { text: 'に', isKanji: false, ruby: null,     spacing: 12 },
-            { text: '頑', isKanji: true,  ruby: 'がん',   spacing: 25 },
-            { text: '張', isKanji: true,  ruby: 'ば',     spacing: 25 },
-            { text: 'っ', isKanji: false, ruby: null,     spacing: 12 },
-            { text: 'た', isKanji: false, ruby: null,     spacing: 12 },
-            { text: '運', isKanji: true,  ruby: 'うん',   spacing: 25 },
-            { text: '動', isKanji: true,  ruby: 'どう',   spacing: 25 },
-            { text: '会', isKanji: true,  ruby: 'かい',   spacing: 25 },
-            { text: '。', isKanji: false, ruby: null,     spacing: 15 },
-            { text: '心', isKanji: true,  ruby: 'こころ', spacing: 25 },
-            { text: 'を', isKanji: false, ruby: null,     spacing: 12 },
-            { text: '一', isKanji: true,  ruby: 'ひと',   spacing: 25 },
-            { text: 'つ', isKanji: false, ruby: null,     spacing: 12 },
-            { text: 'に', isKanji: false, ruby: null,     spacing: 12 },
-            { text: 'し', isKanji: false, ruby: null,     spacing: 12 },
-            { text: 'た', isKanji: false, ruby: null,     spacing: 12 },
-            { text: 'よ', isKanji: false, ruby: null,     spacing: 12 },
-            { text: '。', isKanji: false, ruby: null }
-        ];
-    } 
-    // ページ4の1行目
-    else if (text === 'お化けになった先生が怖かったけど、') {
-        return [
-            { text: 'お', isKanji: false, ruby: null, spacing: 12 },
-            { text: '化', isKanji: true, ruby: 'ば', spacing: 20 },
-            { text: 'け', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'に', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'な', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'っ', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'た', isKanji: false, ruby: null, spacing: 12 },
-            { text: '先', isKanji: true, ruby: 'せん', spacing: 25 },
-            { text: '生', isKanji: true, ruby: 'せい', spacing: 25 },
-            { text: 'が', isKanji: false, ruby: null, spacing: 12 },
-            { text: '怖', isKanji: true, ruby: 'こわ', spacing: 25 },
-            { text: 'か', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'っ', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'た', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'け', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'ど', isKanji: false, ruby: null, spacing: 12 }
-        ];
+    const rubyMap = {
+        '友': 'とも', '達': 'だち', '遊': 'あそ', '公': 'こう', '園': 'えん',
+        '弁': 'べん', '当': 'とう', '楽': 'たの', '遠': 'えん', '足': 'そく',
+        '皆': 'みな', '一': 'いっ', '生': 'しょう', '懸': 'けん', '命': 'めい', '頑': 'がん', '張': 'ば', '運': 'うん', '動': 'どう', '会': 'かい', '心': 'こころ', // '一'の読みは文脈依存
+        '化': 'ば', '先': 'せん', '生': 'せい', '怖': 'こわ', '思': 'おも', '出': 'で',
+        '練': 'れん', '習': 'しゅう', '見': 'み',
+        '別': 'わか', '寂': 'さび'
+    };
+    // '一' の読み分けを試みる（簡易）
+    if (text.includes('心を一つに')) rubyMap['一'] = 'ひと';
+    else if (text.includes('一生懸命')) rubyMap['一'] = 'いっ'; // こちらを優先
+
+    // 文字間隔を広めに設定して重なりを防止
+    const parts = [];
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const ruby = rubyMap[char];
+        const isKanji = !!ruby;
+        // 文字間隔を広めに取る
+        let currentSpacing = 8; // 基本間隔をさらに広くする
+        if (['。', '、', '！', '？'].includes(char)) currentSpacing = 10; // 句読点の後はさらに広く
+        const spacing = (i < text.length - 1) ? currentSpacing : 0;
+        parts.push({ text: char, isKanji: isKanji, ruby: ruby || null, spacing: spacing });
     }
-    // ページ4の2行目
-    else if (text === 'いい思い出になったおばけやしき。') {
-        return [
-            { text: 'い', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'い', isKanji: false, ruby: null, spacing: 12 },
-            { text: '思', isKanji: true, ruby: 'おも', spacing: 25 },
-            { text: 'い', isKanji: false, ruby: null, spacing: 12 },
-            { text: '出', isKanji: true, ruby: 'で', spacing: 20 },
-            { text: 'に', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'な', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'っ', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'た', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'お', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'ば', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'け', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'や', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'し', isKanji: false, ruby: null, spacing: 12 },
-            { text: 'き', isKanji: false, ruby: null, spacing: 12 },
-            { text: '。', isKanji: false, ruby: null, spacing: 12 }
-        ];
-    }
-    // ページ5の1行目
-    else if (text === 'たくさん練習してパパとママに見てもらった') {
-        return [
-            { text: 'た', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'く', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'さ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'ん', isKanji: false, ruby: null, spacing: 10 },
-            { text: '練', isKanji: true, ruby: 'れん', spacing: 28 },
-            { text: '習', isKanji: true, ruby: 'しゅう', spacing: 30 },
-            { text: 'し', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'て', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'パ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'パ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'と', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'マ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'マ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'に', isKanji: false, ruby: null, spacing: 10 },
-            { text: '見', isKanji: true, ruby: 'み', spacing: 22 },
-            { text: 'て', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'も', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'ら', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'っ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'た', isKanji: false, ruby: null }
-        ];
-    }
-    // ページ5の2行目
-    else if (text === 'にじいろステージ。思い出がたくさん。') {
-        return [
-            { text: 'に', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'じ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'い', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'ろ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'ス', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'テ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'ー', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'ジ', isKanji: false, ruby: null, spacing: 10 },
-            { text: '。', isKanji: false, ruby: null, spacing: 18 },
-            { text: '思', isKanji: true, ruby: 'おも', spacing: 28 },
-            { text: 'い', isKanji: false, ruby: null, spacing: 10 },
-            { text: '出', isKanji: true, ruby: 'で', spacing: 22 },
-            { text: 'が', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'た', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'く', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'さ', isKanji: false, ruby: null, spacing: 10 },
-            { text: 'ん', isKanji: false, ruby: null, spacing: 10 },
-            { text: '。', isKanji: false, ruby: null }
-        ];
-    }
-    // ページ6のテキスト
-    else if (text === '先生とのお別れは寂しいけど思い出をありがとう' || text === '先生とのお別れは寂しいけど、思い出をありがとう') {
-        return [
-            { text: '先', isKanji: true, ruby: 'せん', spacing: 20 },
-            { text: '生', isKanji: true, ruby: 'せい', spacing: 20 },
-            { text: 'と', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'の', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'お', isKanji: false, ruby: null, spacing: 8 },
-            { text: '別', isKanji: true, ruby: 'わか', spacing: 20 },
-            { text: 'れ', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'は', isKanji: false, ruby: null, spacing: 8 },
-            { text: '寂', isKanji: true, ruby: 'さび', spacing: 20 },
-            { text: 'し', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'い', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'け', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'ど', isKanji: false, ruby: null, spacing: 15 },
-            { text: '、', isKanji: false, ruby: null, spacing: 8 },
-            { text: '思', isKanji: true, ruby: 'おも', spacing: 20 },
-            { text: 'い', isKanji: false, ruby: null, spacing: 8 },
-            { text: '出', isKanji: true, ruby: 'で', spacing: 15 },
-            { text: 'を', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'あ', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'り', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'が', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'と', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'う', isKanji: false, ruby: null }
-        ];
-    }
-    // ページ6の1行目
-    else if (text === '先生とのお別れは寂しいけど、') {
-        return [
-            { text: '先', isKanji: true, ruby: 'せん', spacing: 20 },
-            { text: '生', isKanji: true, ruby: 'せい', spacing: 20 },
-            { text: 'と', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'の', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'お', isKanji: false, ruby: null, spacing: 8 },
-            { text: '別', isKanji: true, ruby: 'わか', spacing: 20 },
-            { text: 'れ', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'は', isKanji: false, ruby: null, spacing: 8 },
-            { text: '寂', isKanji: true, ruby: 'さび', spacing: 20 },
-            { text: 'し', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'い', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'け', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'ど', isKanji: false, ruby: null, spacing: 15 },
-            { text: '、', isKanji: false, ruby: null, spacing: 8 }
-        ];
-    }
-    // ページ6の2行目
-    else if (text === '思い出をありがとう') {
-        return [
-            { text: '思', isKanji: true, ruby: 'おも', spacing: 20 },
-            { text: 'い', isKanji: false, ruby: null, spacing: 8 },
-            { text: '出', isKanji: true, ruby: 'で', spacing: 15 },
-            { text: 'を', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'あ', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'り', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'が', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'と', isKanji: false, ruby: null, spacing: 8 },
-            { text: 'う', isKanji: false, ruby: null }
-        ];
-    }
-    
-    return [];
+    return parts;
 }
 
 // ページをロードして設定する関数
 async function loadPages() {
-    // 現在選択されている言語のテキストを取得
+    console.log(`Loading pages for language: ${currentLanguage}`);
     const texts = languageData[currentLanguage];
-    
-    // ページ1用のテクスチャを作成（画像+テキスト）
-    const page1Texture = await createTextOverlayTexture(
-        '/images/page1.jpg',
-        texts.page1,
-        '',
-        0.85 // テキスト位置をより下に配置
-    );
-    
-    // ページ2用のテクスチャを作成
-    const page2Texture = await createTextOverlayTexture(
-        '/images/page2.jpg',
-        texts.page2,
-        '',
-        0.85 // テキスト位置をより下に配置
-    );
-    
-    // ページ3用のテクスチャを作成
-    const page3Texture = await createTextOverlayTexture(
-        '/images/page3.jpg',
-        texts.page3,
-        '',
-        0.85 // テキスト位置をより下に配置
-    );
-    
-    // ページ4用のテクスチャを作成
-    const page4Texture = await createTextOverlayTexture(
-        '/images/page4.jpg',
-        texts.page4,
-        '',
-        0.85 // テキスト位置をより下に配置
-    );
-    
-    // ページ5用のテクスチャを作成 - 2段に分けてテキストを表示
-    const page5Texture = await createTextOverlayTexture(
-        '/images/page5.jpg',
-        texts.page5,
-        '',
-        0.85 // テキスト位置をより下に配置
-    );
-    
-    // ページ6用のテクスチャを作成
-    const page6Texture = await createTextOverlayTexture(
-        '/images/page6.jpg',
-        texts.page6,
-        '',
-        0.85 // テキスト位置をより下に配置
-    );
-    
-    // ページの設定
-    const dummyPages = [
-        "/images/cover.jpg", // 表紙に「おもいで」の画像を使用
-        "/images/inside-cover.jpg", // 表紙の裏
-        page1Texture, // ページ1（テキスト付き）
-        page2Texture, // ページ2（テキスト付き）
-        page3Texture, // ページ3（テキスト付き）
-        page4Texture, // ページ4（テキスト付き）
-        page5Texture, // ページ5（テキスト付き）
-        page6Texture, // ページ6（テキスト付き）
-        "/images/back-inside.jpg", // 裏表紙の裏
-        "/images/back-cover.jpg" // 裏表紙
+    const imagePaths = [
+        '/images/cover.jpg', '/images/inside-cover.jpg', '/images/page1.jpg',
+        '/images/page2.jpg', '/images/page3.jpg', '/images/page4.jpg',
+        '/images/page5.jpg', '/images/page6.jpg', '/images/back-inside.jpg',
+        '/images/back-cover.jpg'
     ];
-    
-    book.setPages(dummyPages);
-    
-    // ページめくり効果の調整
-    for (const page of book) {
-        // ページの曲げ効果を強調
-        page.pageCurve.factor = 0.3;
-        
-        // ページの影を強調
-        if (page.material && page.material.aoMap) {
-            page.material.aoMapIntensity = 1.5;
+    const pageKeys = [null, null, 'page1', 'page2', 'page3', 'page4', 'page5', 'page6', null, null];
+
+    const texturePromises = imagePaths.map((path, index) => {
+        const pageKey = pageKeys[index];
+        if (pageKey && texts[pageKey]) {
+            console.log(`Creating texture for page index ${index} (key: ${pageKey})`);
+            return createTextOverlayTexture(path, texts[pageKey]);
+        } else {
+            console.log(`Using image path directly for page index ${index}`);
+            return Promise.resolve(path);
         }
-        
-        // 変更を適用
+    });
+
+    try {
+        const pagesContent = await Promise.all(texturePromises);
+        console.log("All page textures/paths loaded:", pagesContent.map(p => typeof p === 'string' ? p : '[Texture]'));
+        const validPagesContent = pagesContent.map(content => content || '/images/error.jpg');
+        book.setPages(validPagesContent);
+
+        book.traverse(child => {
+            if (child.isMesh) {
+                 child.castShadow = true;
+                 child.receiveShadow = true;
+                 if (child.material instanceof THREE.MeshStandardMaterial) {
+                     child.material.roughness = 0.8;
+                     child.material.metalness = 0.1;
+                     if (child.material.aoMap) child.material.aoMapIntensity = 1.2;
+                 }
+            }
+        });
+
+        // quick_flipbook のバージョン等に合わせて調整
+         if (book.pages && Array.isArray(book.pages)) {
+             book.pages.forEach(page => {
+                 if (page && page.pageCurve && typeof page.modifiers?.apply === 'function') {
+                     page.pageCurve.factor = 0.3;
         page.modifiers.apply();
+                 }
+             });
+         }
+
+        console.log("Book pages set successfully.");
+        updateUIText();
+    } catch (error) {
+        console.error("Error loading or setting pages:", error);
+        alert("絵本の読み込み中にエラーが発生しました。");
     }
-    
-    // UIのテキストを更新
-    updateUIText();
 }
 
 // ページめくり効果の音声
 let pageFlipSound = null;
-// 音声の読み込み
 const audioLoader = new THREE.AudioLoader();
 const listener = new THREE.AudioListener();
 camera.add(listener);
 
-// 音声の作成
+try {
 pageFlipSound = new THREE.Audio(listener);
-audioLoader.load('https://assets.codepen.io/28963/page-flip.mp3', function(buffer) {
+    audioLoader.load('https://assets.codepen.io/28963/page-flip.mp3', buffer => {
     pageFlipSound.setBuffer(buffer);
-    pageFlipSound.setVolume(0.5);
-});
+        pageFlipSound.setVolume(0.4);
+        console.log("Page flip sound loaded.");
+    }, undefined, err => console.error("Error loading page flip sound:", err));
+} catch (e) { console.error("Failed to initialize Audio:", e); }
 
-// ボタンイベントの設定
-document.getElementById('prevPage').addEventListener('click', () => {
+// --- UI関連の関数 ---
+document.getElementById('prevPage')?.addEventListener('click', () => {
     book.previousPage();
-    if (pageFlipSound) pageFlipSound.play();
+    if (pageFlipSound) { if (pageFlipSound.isPlaying) pageFlipSound.stop(); pageFlipSound.play(); }
+    stopSpeaking();
+    // ページめくり後、少し遅延させて読み上げ開始
+    setTimeout(() => {
+        speakCurrentPage();
+    }, 800); // 800ms後に読み上げ開始（ページめくりアニメーション完了後）
 });
 
-document.getElementById('nextPage').addEventListener('click', () => {
+document.getElementById('nextPage')?.addEventListener('click', () => {
     book.nextPage();
-    if (pageFlipSound) pageFlipSound.play();
+    if (pageFlipSound) { if (pageFlipSound.isPlaying) pageFlipSound.stop(); pageFlipSound.play(); }
+    stopSpeaking();
+    // ページめくり後、少し遅延させて読み上げ開始
+    setTimeout(() => {
+        speakCurrentPage();
+    }, 800); // 800ms後に読み上げ開始（ページめくりアニメーション完了後）
 });
 
-// 言語切り替えのUIを作成
 function createLanguageSelector() {
-    // 言語選択ボタンを作成
+    document.getElementById('langButton')?.remove();
+    document.getElementById('langMenu')?.remove();
     const langButton = document.createElement('button');
-    langButton.id = 'langButton';
-    langButton.className = 'control-button lang-button';
-    langButton.textContent = languageData[currentLanguage].langBtn;
-    langButton.style.position = 'fixed';
-    langButton.style.right = '20px';
-    langButton.style.top = '20px';
-    langButton.style.zIndex = '100';
-    langButton.style.padding = '10px 15px';
-    langButton.style.background = 'rgba(33, 150, 243, 0.9)'; // より鮮明な青色
-    langButton.style.color = 'white';
-    langButton.style.fontWeight = 'bold';
-    langButton.style.border = 'none';
-    langButton.style.borderRadius = '5px';
-    langButton.style.cursor = 'pointer';
-    langButton.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
-    
-    // 言語選択メニューを作成
+    langButton.id = 'langButton'; langButton.className = 'control-button lang-button';
+    langButton.textContent = languageData[currentLanguage]?.langBtn || 'Language';
+    Object.assign(langButton.style, { position: 'fixed', right: '20px', top: '20px', zIndex: '100', padding: '10px 15px', background: 'rgba(33, 150, 243, 0.9)', color: 'white', fontWeight: 'bold', border: 'none', borderRadius: '5px', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' });
     const langMenu = document.createElement('div');
     langMenu.id = 'langMenu';
-    langMenu.style.position = 'fixed';
-    langMenu.style.right = '20px';
-    langMenu.style.top = '70px';
-    langMenu.style.zIndex = '100';
-    langMenu.style.background = 'rgba(255, 255, 255, 0.95)';
-    langMenu.style.border = 'none';
-    langMenu.style.borderRadius = '5px';
-    langMenu.style.display = 'none';
-    langMenu.style.flexDirection = 'column';
-    langMenu.style.padding = '10px';
-    langMenu.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-    langMenu.style.minWidth = '120px';
-    
-    // 各言語のオプションを追加
+    Object.assign(langMenu.style, { position: 'fixed', right: '20px', top: '70px', zIndex: '100', background: 'rgba(255, 255, 255, 0.98)', border: '1px solid #ddd', borderRadius: '5px', display: 'none', flexDirection: 'column', padding: '5px', boxShadow: '0 4px 8px rgba(0,0,0,0.15)', minWidth: '120px' });
     Object.keys(languageData).forEach(langCode => {
         const langOption = document.createElement('button');
-        langOption.textContent = languageData[langCode].langName;
-        langOption.style.padding = '10px 15px';
-        langOption.style.margin = '5px 0';
-        langOption.style.background = langCode === currentLanguage ? 'rgba(33, 150, 243, 0.2)' : 'transparent';
-        langOption.style.border = 'none';
-        langOption.style.borderRadius = '3px';
-        langOption.style.borderBottom = '1px solid #eee';
-        langOption.style.cursor = 'pointer';
-        langOption.style.textAlign = 'left';
-        langOption.style.width = '100%';
-        langOption.style.transition = 'background 0.3s';
-        
-        // ホバー効果
-        langOption.addEventListener('mouseover', () => {
-            langOption.style.background = 'rgba(33, 150, 243, 0.1)';
-        });
-        
-        langOption.addEventListener('mouseout', () => {
-            langOption.style.background = langCode === currentLanguage ? 'rgba(33, 150, 243, 0.2)' : 'transparent';
-        });
-        
-        // 最後の項目のボーダーを消す
-        if (langCode === Object.keys(languageData)[Object.keys(languageData).length - 1]) {
-            langOption.style.borderBottom = 'none';
-        }
-        
-        // 言語選択時の動作
-        langOption.addEventListener('click', () => {
-            changeLanguage(langCode);
-            langMenu.style.display = 'none';
-            
-            // 全ての言語オプションのスタイルをリセット
-            Array.from(langMenu.children).forEach(opt => {
-                opt.style.background = 'transparent';
-            });
-            
-            // 選択された言語のスタイルを変更
-            langOption.style.background = 'rgba(33, 150, 243, 0.2)';
-        });
-        
+        langOption.textContent = languageData[langCode]?.langName || langCode;
+        Object.assign(langOption.style, { padding: '8px 12px', margin: '3px 0', background: langCode === currentLanguage ? 'rgba(33, 150, 243, 0.15)' : 'transparent', border: 'none', borderRadius: '3px', cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background 0.2s ease' });
+        langOption.addEventListener('mouseover', () => { if(langCode !== currentLanguage) langOption.style.background = 'rgba(0, 0, 0, 0.05)'; });
+        langOption.addEventListener('mouseout', () => { langOption.style.background = langCode === currentLanguage ? 'rgba(33, 150, 243, 0.15)' : 'transparent'; });
+        langOption.addEventListener('click', (e) => { e.stopPropagation(); if (currentLanguage !== langCode) changeLanguage(langCode); langMenu.style.display = 'none'; });
         langMenu.appendChild(langOption);
     });
-    
-    // ボタンクリックでメニュー表示切り替え
-    langButton.addEventListener('click', () => {
-        if (langMenu.style.display === 'none') {
-            langMenu.style.display = 'flex';
-        } else {
-            langMenu.style.display = 'none';
+    langButton.addEventListener('click', (e) => { e.stopPropagation(); langMenu.style.display = langMenu.style.display === 'none' ? 'flex' : 'none'; });
+    document.addEventListener('click', (e) => { 
+        if (!langButton.contains(e.target) && !langMenu.contains(e.target)) {
+            langMenu.style.display = 'none'; 
         }
     });
-    
-    // 画面上のどこかをクリックしたらメニューを閉じる
-    document.addEventListener('click', (e) => {
-        if (e.target !== langButton && !langMenu.contains(e.target)) {
-            langMenu.style.display = 'none';
-        }
-    });
-    
-    // UIに追加
-    document.body.appendChild(langButton);
-    document.body.appendChild(langMenu);
+    document.body.appendChild(langButton); document.body.appendChild(langMenu);
 }
 
-// 言語を切り替える関数
 function changeLanguage(langCode) {
-    // 言語コードが有効か確認
-    if (languageData[langCode]) {
-        currentLanguage = langCode;
-        
-        // ページを再ロード
-        loadPages();
-        
-        // UIのテキストを更新
-        updateUIText();
+    if (languageData[langCode] && currentLanguage !== langCode) {
+        console.log(`Changing language to: ${langCode}`);
+        stopSpeaking(); currentLanguage = langCode;
+        loadPages().then(() => { // loadPages が完了してからUI更新
+             updateLanguageSelectorUI();
+             updateUIText(); // ボタンテキスト等も更新
+        });
     }
 }
 
-// UIのテキストを更新する関数
 function updateUIText() {
+    const texts = languageData[currentLanguage]; if (!texts) return;
+    const prevBtn = document.getElementById('prevPage'); if (prevBtn) prevBtn.textContent = texts.prevBtn;
+    const nextBtn = document.getElementById('nextPage'); if (nextBtn) nextBtn.textContent = texts.nextBtn;
+    const speakButton = document.getElementById('speakButton'); if (speakButton) speakButton.textContent = isSpeaking ? texts.stopBtn : texts.speakBtn;
+    const langButton = document.getElementById('langButton'); if (langButton) langButton.textContent = texts.langBtn;
+}
+
+function updateLanguageSelectorUI() {
+     const langMenu = document.getElementById('langMenu');
+     if (langMenu) {
+         Array.from(langMenu.children).forEach((option, index) => {
+             const langCode = Object.keys(languageData)[index];
+             if (option instanceof HTMLButtonElement) option.style.background = langCode === currentLanguage ? 'rgba(33, 150, 243, 0.15)' : 'transparent';
+         });
+     }
+ }
+
+function createSpeakButton() {
+    document.getElementById('speakButton')?.remove();
+    const speakButton = document.createElement('button');
+    speakButton.id = 'speakButton'; speakButton.className = 'control-button speak-button';
+    speakButton.textContent = languageData[currentLanguage]?.speakBtn || 'Read Aloud';
+    speakButton.addEventListener('click', speakCurrentPage);
+    const controlsContainer = document.querySelector('.controls');
+    if (controlsContainer) { controlsContainer.appendChild(speakButton); console.log("Speak button added."); }
+    else { console.warn(".controls container not found, adding to body."); Object.assign(speakButton.style, { position: 'fixed', bottom: '20px', left: 'calc(50% - 50px)' }); document.body.appendChild(speakButton); }
+}
+
+// --- 読み上げ関連の関数 ---
+
+// ★★★ 見開き両ページを読むように再修正された関数 ★★★
+async function speakCurrentPage() {
+    // 再生中にクリックされたら停止
+    if (isSpeaking) {
+        stopSpeaking();
+        return;
+    }
+
+    const currentPageIndex = book.currentPage;
+    console.log(`[speakCurrentPage] Current page index from book: ${currentPageIndex}`);
+
+    // 実際に見えているページを特定
+    // 見開きのどちらを読むか決定する
+    let pageKey = null;
+
+    // FlipBookのページインデックスから適切なテキストキーを特定
+    if (currentPageIndex === 0) {
+        // 表紙の場合は読み上げない
+        console.log("[speakCurrentPage] Cover page, nothing to read.");
+        return;
+    } else if (currentPageIndex === 1) {
+        // 表紙裏の場合も読み上げない
+        console.log("[speakCurrentPage] Inside cover, nothing to read.");
+        return;
+    } else if (currentPageIndex === 2 || currentPageIndex === 3) {
+        // 1ページ目のテキスト
+        pageKey = 'page1';
+    } else if (currentPageIndex === 4 || currentPageIndex === 5) {
+        // 2ページ目/3ページ目のテキスト
+        pageKey = currentPageIndex === 4 ? 'page3' : 'page4';
+    } else if (currentPageIndex === 6 || currentPageIndex === 7) {
+        // 4ページ目/5ページ目のテキスト
+        pageKey = currentPageIndex === 6 ? 'page5' : 'page6';
+    } else if (currentPageIndex >= 8) {
+        // 裏表紙部分は読み上げない
+        console.log("[speakCurrentPage] Back cover, nothing to read.");
+        return;
+    }
+
+    console.log(`[speakCurrentPage] Selected page key: ${pageKey}`);
+
     const texts = languageData[currentLanguage];
-    
-    // ボタンのテキストを更新
-    document.getElementById('prevPage').textContent = texts.prevBtn;
-    document.getElementById('nextPage').textContent = texts.nextBtn;
-    
-    // 言語ボタンのテキストを更新
-    const langButton = document.getElementById('langButton');
-    if (langButton) {
-        langButton.textContent = texts.langBtn;
+    if (!texts) {
+        console.error(`[speakCurrentPage] Language data not found for "${currentLanguage}".`);
+        stopSpeaking();
+        return;
+    }
+
+    // 選択したページのテキストを取得
+    const textToSpeak = texts[pageKey] || "";
+
+    if (!textToSpeak) {
+        console.warn(`[speakCurrentPage] Text not found for key "${pageKey}". Nothing to speak.`);
+        stopSpeaking();
+        return;
+    }
+
+    console.log(`[speakCurrentPage] Text to speak: "${textToSpeak}"`);
+
+    // 読み上げ実行
+    try {
+        await speakText(textToSpeak);
+    } catch (error) {
+        console.error("[speakCurrentPage] Failed to initiate speakText:", error);
+        isSpeaking = false;
+        updateSpeakButtonState();
     }
 }
 
-// 言語選択UIを作成
-createLanguageSelector();
 
-// ページをロード
-loadPages();
+async function speakText(text) {
+    if (!text) { console.error('[speakText] Error: Text is empty.'); return; }
+    if(isSpeaking) { console.warn('[speakText] Warning: Already speaking.'); stopSpeaking(); }
 
-// ウィンドウリサイズ対応
-window.addEventListener('resize', () => {
+    isSpeaking = true; updateSpeakButtonState();
+
+    try {
+        const voice = getBestVoiceForLanguage(currentLanguage);
+        console.log(`[speakText] Requesting speech for: "${text.substring(0, 50)}..." with voice: ${voice}`);
+        try {
+            const audioBuffer = await textToSpeech(text, voice);
+            if (!audioBuffer || !(audioBuffer instanceof ArrayBuffer) || audioBuffer.byteLength < 100) { // サイズが小さすぎる場合もエラー扱い
+                console.error('[speakText] Error: Invalid or empty audio data from OpenAI API.');
+                throw new Error('Invalid or empty audio data');
+            }
+            console.log(`[speakText] Received audio data (size: ${audioBuffer.byteLength} bytes). Playing...`);
+
+            // audioPlayer.playAudio が Promise を返すことを期待
+            await audioPlayer.playAudio(audioBuffer);
+
+            // 再生完了のハンドリング (audioPlayerの実装に依存)
+            if (audioPlayer.audio && typeof audioPlayer.audio.addEventListener === 'function') {
+                 const onEndHandler = () => {
+                     console.log('[speakText] Audio playback finished (onended).');
+                     isSpeaking = false; updateSpeakButtonState();
+                     audioPlayer.audio.removeEventListener('ended', onEndHandler);
+                 };
+                 // 'ended' イベントが発火しない場合があるため、'pause' も監視する方が安全かもしれない
+                 audioPlayer.audio.addEventListener('ended', onEndHandler, { once: true });
+             } else {
+                 console.warn('[speakText] Cannot attach ended listener. Manual state reset needed?');
+                 // ここで isSpeaking = false にすると再生終了前に状態が変わる可能性
+             }
+        } catch (apiError) {
+            console.error('[speakText] Error during OpenAI TTS or playback:', apiError);
+            console.log('[speakText] Falling back to browser SpeechSynthesis...');
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = languageVoiceMap[currentLanguage] || 'ja-JP';
+                utterance.rate = 1.0; utterance.pitch = 1.0;
+                utterance.onend = () => { console.log('[speakText] Browser SpeechSynthesis finished.'); isSpeaking = false; updateSpeakButtonState(); };
+                utterance.onerror = (event) => { console.error('[speakText] Browser SpeechSynthesis error:', event); isSpeaking = false; updateSpeakButtonState(); };
+                // SpeechSynthesisがビジーな場合があるので、念のためキャンセルしてからspeak
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(utterance);
+            } else {
+                console.error('[speakText] Browser SpeechSynthesis not supported.');
+                isSpeaking = false; updateSpeakButtonState();
+                alert('音声読み上げ機能が利用できません。');
+            }
+        }
+    } catch (error) {
+        console.error('[speakText] Unexpected error:', error);
+        isSpeaking = false; updateSpeakButtonState();
+        alert('音声読み上げ準備中にエラーが発生しました。');
+    }
+}
+
+function stopSpeaking() {
+    console.log('[stopSpeaking] Stopping speech...');
+    audioPlayer.stop();
+    if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+    }
+    if (isSpeaking) { // isSpeakingがtrueの場合のみ更新
+        isSpeaking = false;
+        updateSpeakButtonState();
+    }
+}
+
+function updateSpeakButtonState() {
+    const speakButton = document.getElementById('speakButton');
+    const texts = languageData[currentLanguage];
+    if (speakButton && texts) {
+        speakButton.textContent = isSpeaking ? texts.stopBtn : texts.speakBtn;
+        if(isSpeaking) speakButton.classList.add('speaking');
+        else speakButton.classList.remove('speaking');
+        console.log(`[updateSpeakButtonState] Button text: ${speakButton.textContent}, isSpeaking: ${isSpeaking}`);
+    }
+}
+
+// --- 初期化とアニメーションループ ---
+function init() {
+    console.log("Initializing application...");
+    createLanguageSelector();
+    createSpeakButton();
+    loadPages(); // 非同期開始
+    
+    // イベントリスナー設定
+    window.addEventListener('resize', onWindowResize, false);
+    
+    // マウスイベントの設定 - ページめくり用
+    renderer.domElement.addEventListener('click', onMouseClick, false);
+    
+    // タッチイベントの設定 - モバイル端末用ページめくり
+    setupTouchEvents();
+    
+    // ホイールイベントの設定 - ズーム用
+    renderer.domElement.addEventListener('wheel', function(event) {
+        event.preventDefault(); // デフォルトのスクロール動作を防止
+    }, { passive: false });
+    
+    animate();
+    console.log("Initialization complete.");
+}
+
+function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-});
+}
 
-// アニメーションループ
+function onMouseClick(event) {
+    // Ctrl, Alt, Shiftキーが押されている場合や右クリックの場合は
+    // OrbitControlsの操作と解釈してページめくりを行わない
+    if (event.button !== 0 || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+    }
+    
+    const mouse = new THREE.Vector2(
+        (event.clientX / window.innerWidth) * 2 - 1,
+        -(event.clientY / window.innerHeight) * 2 + 1
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(book.children, true);
+
+    if (intersects.length > 0) {
+        const clickWorldPoint = intersects[0].point;
+        const localClickPoint = book.worldToLocal(clickWorldPoint.clone());
+        console.log("Local click point X:", localClickPoint.x);
+        if (localClickPoint.x > 0.05) { // 右側をクリック (閾値を少し設ける)
+             console.log("Clicked right side -> nextPage()");
+             book.nextPage();
+             if (pageFlipSound) { if (pageFlipSound.isPlaying) pageFlipSound.stop(); pageFlipSound.play(); }
+             stopSpeaking();
+             // ページめくり後、少し遅延させて読み上げ開始
+             setTimeout(() => {
+                 speakCurrentPage();
+             }, 800); // 800ms後に読み上げ開始
+        } else if (localClickPoint.x < -0.05) { // 左側をクリック
+            console.log("Clicked left side -> previousPage()");
+             book.previousPage();
+             if (pageFlipSound) { if (pageFlipSound.isPlaying) pageFlipSound.stop(); pageFlipSound.play(); }
+             stopSpeaking();
+             // ページめくり後、少し遅延させて読み上げ開始
+             setTimeout(() => {
+                 speakCurrentPage();
+             }, 800); // 800ms後に読み上げ開始
+        } else {
+            console.log("Clicked near center, no page turn.");
+        }
+    }
+}
+
+// タッチイベントのセットアップ
+function setupTouchEvents() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchMoved = false;
+    const swipeThreshold = 50; // スワイプを検出する最小の距離（ピクセル）
+    
+    renderer.domElement.addEventListener('touchstart', function(event) {
+        touchStartX = event.touches[0].clientX;
+        touchStartY = event.touches[0].clientY;
+        touchMoved = false;
+    }, false);
+    
+    renderer.domElement.addEventListener('touchmove', function(event) {
+        // 既定のスクロール動作を防止
+        event.preventDefault();
+        touchMoved = true;
+    }, { passive: false });
+    
+    renderer.domElement.addEventListener('touchend', function(event) {
+        if (!touchMoved) return; // タッチが移動していない場合は無視
+        
+        const touchEndX = event.changedTouches[0].clientX;
+        const touchEndY = event.changedTouches[0].clientY;
+        
+        // X軸の移動距離
+        const deltaX = touchEndX - touchStartX;
+        // Y軸の移動距離
+        const deltaY = touchEndY - touchStartY;
+        
+        // 水平方向の移動が垂直方向より大きい場合に処理（ページめくりジェスチャー）
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > swipeThreshold) {
+            if (deltaX > 0) {
+                // 右にスワイプ -> 前のページ
+                console.log("Right swipe detected -> previousPage()");
+                book.previousPage();
+                if (pageFlipSound) { 
+                    if (pageFlipSound.isPlaying) pageFlipSound.stop(); 
+                    pageFlipSound.play(); 
+                }
+                stopSpeaking();
+                // ページめくり後、少し遅延させて読み上げ開始
+                setTimeout(() => {
+                    speakCurrentPage();
+                }, 800);
+            } else {
+                // 左にスワイプ -> 次のページ
+                console.log("Left swipe detected -> nextPage()");
+                book.nextPage();
+                if (pageFlipSound) { 
+                    if (pageFlipSound.isPlaying) pageFlipSound.stop(); 
+                    pageFlipSound.play(); 
+                }
+                stopSpeaking();
+                // ページめくり後、少し遅延させて読み上げ開始
+                setTimeout(() => {
+                    speakCurrentPage();
+                }, 800);
+            }
+        }
+    }, false);
+}
+
 const clock = new THREE.Clock();
-
 function animate() {
     requestAnimationFrame(animate);
-    
-    // 絵本のアニメーション更新
-    book.animate(clock.getDelta());
-    
-    // コントロールの更新
+    const delta = clock.getDelta();
+    if (typeof book.update === 'function') book.update(delta); // quick_flipbookがupdateメソッドを持つ場合
+    else if (typeof book.animate === 'function') book.animate(delta); // animateメソッドを持つ場合
     controls.update();
-    
-    // シーンのレンダリング
     renderer.render(scene, camera);
 }
 
-animate();
-
-// マウスクリックでページをめくる機能
-renderer.domElement.addEventListener('click', (event) => {
-    // マウス座標の正規化
-    const mouse = new THREE.Vector2();
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    
-    // レイキャスティング
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, camera);
-    
-    // 交差オブジェクトの取得
-    const intersects = raycaster.intersectObjects(scene.children, true);
-    
-    // クリックされたオブジェクトがページの場合、そのページをめくる
-    if (intersects.length > 0) {
-        const object = intersects[0].object;
-        // ページの親オブジェクトを探す
-        let parent = object;
-        while (parent && parent.parent !== book) {
-            parent = parent.parent;
-        }
-        
-        if (parent) {
-            book.flipPage(parent);
-            if (pageFlipSound) pageFlipSound.play();
-        }
-    }
-}); 
+// DOMContentLoadedを待って初期化 (より安全)
+document.addEventListener('DOMContentLoaded', init);
