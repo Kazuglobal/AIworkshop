@@ -1,0 +1,34 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Core Features and User Roles
+
+This rule outlines the core functionalities of the Culture Bridge Program 2025 Web Platform and the different user roles with their specific dashboards and permissions.
+
+## Key Functionalities
+
+The platform offers a range of features to support its objectives. Some of the core functionalities include:
+
+*   **Role-Based Dashboards:** Tailored dashboards for Students, International Students (Mentors), and Administrators.
+*   **Resource Search & Sharing:** Integration with Gemini API for searching and sharing relevant resources (news, articles on volunteering, SDGs).
+*   **Work Submission & Feedback:** System for students to submit work (text, files, images, videos) and receive feedback.
+*   **Group Chat & Communication:** Realtime chat functionality for groups and direct messaging with mentors.
+*   **PDF Material Download:** Easy access to download all program materials, worksheets, and templates.
+*   **Presentation Support:** Templates, tips, and archives for student presentations.
+*   **Multilingual Support:** Initially Japanese and English.
+
+Detailed descriptions of these features can be found in sections 2, 3, and 4 of the [CURSOR_PRD.md](mdc:CURSOR_PRD.md).
+
+## User Roles and Permissions
+
+The platform defines distinct user roles, each with specific access and capabilities:
+
+*   **Students:** Access to personal dashboard, work submission, progress tracking, group chat, and resource materials.
+*   **International Students (Mentors):** Manage assigned students/groups, provide support messages, access facilitation guides, and edit their profiles.
+*   **Administrators/Teachers:** Overall platform management, content distribution, progress/attendance/evaluation tracking, user management, and data export.
+
+Refer to section 3 of the [CURSOR_PRD.md](mdc:CURSOR_PRD.md) for specifics on user permissions.
+
+

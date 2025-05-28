@@ -1,0 +1,33 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Data Model and Supabase Schema
+
+This rule provides guidance on the data structure used in the Culture Bridge Program 2025 Web Platform, primarily managed by Supabase.
+
+## Supabase Database Structure
+
+The backend relies on Supabase, utilizing its Postgres database, authentication, storage, realtime capabilities, and edge functions. The data model is designed to support the platform's features and user roles.
+
+### Key Tables (Examples)
+
+The PRD outlines examples of the core tables:
+
+*   `users`: Stores common information for all user roles (students, mentors, admins).
+*   `groups`: Defines student groups, their themes, members, and assigned mentors.
+*   `resources`: Manages shared resources like articles, links, and documents.
+*   `works`: Tracks student submissions, content, status, and links to feedback.
+*   `feedback`: Stores feedback provided on student work.
+*   `messages`: Contains chat messages for groups and direct communication.
+
+For the example SQL schema and more details on the data structure, please refer to section 5 of the [CURSOR_PRD.md](mdc:CURSOR_PRD.md).
+
+## Row Level Security (RLS)
+
+Supabase's Row Level Security (RLS) will be crucial for ensuring users can only access and modify data they are permitted to. The design of RLS policies is a key part of the database setup (see section 1.3 of [PROJECT_TASKS.md](mdc:PROJECT_TASKS.md)).
+
+Understanding this data model is essential for developing backend logic, APIs, and frontend components that interact with the data.
+
+

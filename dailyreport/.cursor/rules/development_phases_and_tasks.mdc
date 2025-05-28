@@ -1,0 +1,29 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Development Phases and Task Management
+
+This rule explains how the Culture Bridge Program 2025 Web Platform project is structured into development phases and how tasks are managed.
+
+## Project Phases
+
+The project is broken down into several key phases, from planning and design to deployment and maintenance. These phases provide a structured approach to development and ensure all aspects of the PRD are covered.
+
+The detailed breakdown of tasks for each phase can be found in the Project Tasks document: [PROJECT_TASKS.md](mdc:PROJECT_TASKS.md)
+
+Key phases include:
+1.  **Phase 1: Planning & Design** (Detailed requirements, UI/UX, DB design, API design, Infrastructure)
+2.  **Phase 2: Development Environment Setup**
+3.  **Phase 3: Backend Development (Supabase)** (DB construction, Auth, APIs, Storage, Realtime)
+4.  **Phase 4: Frontend Development** (Common components, Pages for each user role, Features like resource search, work submission, PDF download, multilingual support)
+5.  **Phase 5: Integration & Testing** (Unit, Integration, E2E, Usability, Performance, Security)
+6.  **Phase 6: Release Preparation & Deployment**
+7.  **Phase 7: Operations & Maintenance**
+
+## Task Management
+
+Tasks within each phase are itemized with checkboxes for progress tracking. This helps in understanding the current development stage and upcoming work.
+Referencing [PROJECT_TASKS.md](mdc:PROJECT_TASKS.md) will provide clarity on specific tasks and their status (once updated with progress).
+
